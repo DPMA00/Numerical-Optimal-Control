@@ -33,30 +33,25 @@ def plot_contours(zks):
         plt.pause(0.1)
 
 
-def armijo_backtracking_line_search(z, tau, p, R_z, alpha_start = 1, max_iter = 100, gamma = 0.01, beta = 0.8):
-    alpha = alpha_start
-
-    gradV_dot_p = - (ca.norm_2(R_z(z,tau))**2)
-
-    V_z = 0.5 * ca.norm_2(R_z(z,tau))**2
+def armijo_backtracking_line_search(z, tau, p, R_z, alpha = 1, max_iter = 100, gamma = 0.01, beta = 0.8):
+    gradV_dot_p = - (ca.norm_2(R_z(z, tau))**2)
+    V_z = 0.5 * ca.norm_2(R_z(z, tau))**2
 
     for i in range(max_iter):
-        z_new = z - alpha * p
+        z_new = z + alpha * p
         nu_h = z_new[3]
         s_h = z_new[4]
-        print(z_new)
-        V_znew = 0.5*ca.norm_2(R_z(z_new,tau))**2
-        armijo_condition = V_z + alpha*gamma*gradV_dot_p
-        if ((V_znew <= armijo_condition) and (s_h >=0) and (nu_h>=0)):
+        V_znew = 0.5 * ca.norm_2(R_z(z_new, tau))**2
+        armijo_condition = V_z + alpha * gamma * gradV_dot_p
+        if ((V_znew <= armijo_condition) and (s_h >= 0) and (nu_h >= 0)):
             return alpha
-        
         else:
-            alpha = beta*alpha
-    
+            alpha = beta * alpha
+
     return alpha
         
 
-def NLP_Solve(zk, obj, grad_obj, jac_eq, jac_ineq, hess_obj, hess_eq, hess_ineq, residual, tau=1, tolerance=1e-7, max_iter=200):
+def NLP_Solve(zk, obj, grad_obj, jac_eq, jac_ineq, hess_obj, hess_eq, hess_ineq, residual, tau=1, tolerance=1e-7, max_iter=200, verbose=False):
     zks = [zk]
     t1 = time.time()
 
@@ -82,14 +77,17 @@ def NLP_Solve(zk, obj, grad_obj, jac_eq, jac_ineq, hess_obj, hess_eq, hess_ineq,
         R_z = residual(zks[-1],tau)
 
         if ca.norm_2(R_z) < tolerance:
-            print("=====================================================================")
-            print(f'Solution found in {i+1} iterations')
-            print(f'Solution time (seconds): {round(time.time()- t1,5)}')
-            print(f'Optimal primal variables p*: {zks[-1].full()[0:2].T}')
-            print(f'Objective evaluation at f(p*): {obj(zks[-1])}')
-            print("=====================================================================")
-            print(f'Optimal dual variables d* and slack variables s*: {zks[-1].full()[2:].T}')
-            return zks
+            if verbose == True:
+                print("=====================================================================")
+                print(f'Solution found in {i+1} iterations')
+                print(f'Solution time (seconds): {round(time.time()- t1,5)}')
+                print(f'Optimal primal variables p*: {zks[-1].full()[0:2].T}')
+                print(f'Objective evaluation at f(p*): {obj(zks[-1])}')
+                print("=====================================================================")
+                print(f'Optimal dual variables d* and slack variables s*: {zks[-1].full()[2:].T}')
+                return zks
+            else:
+                return zks
 
         KKT = ca.vertcat(ca.horzcat(hess_Lagrangian, evalf_jacg.T, evalf_jach.T, n_zeros),
                         ca.horzcat(evalf_jacg, 0, 0, 0),
@@ -99,21 +97,24 @@ def NLP_Solve(zk, obj, grad_obj, jac_eq, jac_ineq, hess_obj, hess_eq, hess_ineq,
         
         step_k = ca.inv(KKT) @ R_z
 
-        alpha = 0.8#armijo_backtracking_line_search(zks[-1], tau, step_k, Residual, alpha_start = 1, max_iter = 1000, gamma = 0.01, beta = 0.8)
+        alpha = armijo_backtracking_line_search(zks[-1], tau, -step_k, Residual, alpha = 1, max_iter = 100, gamma = 1e-6, beta = 0.95)
 
         zk_next = zks[-1] - alpha*step_k
 
-        tau *= 0.15
+        tau *= 0.1
         zks.append(zk_next)
 
-    print("=====================================================================")
-    print(f'Solution found in {i+1} iterations')
-    print(f'Solution time (seconds): {round(time.time()- t1,5)}')
-    print(f'Optimal primal variables: {zks[-1].full()[0:2].T}')
-    print(f'Objective evaluation at f(x*): {obj(zks[-1])}')
-    print("=====================================================================")
-    print(f'Optimal dual variables d* and slack variables s*: {zks[-1].full()[2:].T}')
-    return zks
+    if verbose==True:
+        print("=====================================================================")
+        print(f'Solution found in {i+1} iterations')
+        print(f'Solution time (seconds): {round(time.time()- t1,5)}')
+        print(f'Optimal primal variables: {zks[-1].full()[0:2].T}')
+        print(f'Objective evaluation at f(x*): {obj(zks[-1])}')
+        print("=====================================================================")
+        print(f'Optimal dual variables d* and slack variables s*: {zks[-1].full()[2:].T}')
+        return zks
+    else:
+        return zks
 
 
 x = ca.SX.sym('x', 2)
@@ -167,6 +168,6 @@ Residual = ca.Function('R_z', [z,tau], [Residual_RHS])
 
 if __name__ == "__main__":
 
-    zks = NLP_Solve(zk, obj, grad_obj, jac_eq, jac_ineq, hess_obj, hess_eq, hess_ineq, Residual, tau=1, tolerance=1e-6, max_iter=1000)
+    zks = NLP_Solve(zk, obj, grad_obj, jac_eq, jac_ineq, hess_obj, hess_eq, hess_ineq, Residual, tau=1, tolerance=1e-6, max_iter=1000,verbose=True)
 
     plot_contours(zks)
